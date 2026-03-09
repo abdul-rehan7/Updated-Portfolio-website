@@ -29,6 +29,9 @@ import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import type { Session } from "@supabase/supabase-js";
 
+const PROJECT_IMAGES_BUCKET = "project-images";
+const MAX_IMAGE_FILE_SIZE = 5 * 1024 * 1024;
+
 interface Project {
   id: string;
   title: string;
@@ -66,9 +69,51 @@ export default function Admin() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editingProject, setEditingProject] = useState<string | null>(null);
   const [form, setForm] = useState(emptyProject);
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const extractStoragePathFromUrl = (url: string) => {
+    const marker = `/storage/v1/object/public/${PROJECT_IMAGES_BUCKET}/`;
+    const markerIndex = url.indexOf(marker);
+    if (markerIndex === -1) return null;
+    return decodeURIComponent(url.slice(markerIndex + marker.length));
+  };
+
+  const uploadProjectImage = async (file: File) => {
+    if (!session?.user) {
+      throw new Error("You must be logged in to upload images.");
+    }
+
+    if (!file.type.startsWith("image/")) {
+      throw new Error("Please select an image file.");
+    }
+
+    if (file.size > MAX_IMAGE_FILE_SIZE) {
+      throw new Error("Image must be 5MB or smaller.");
+    }
+
+    const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    const path = `${session.user.id}/${Date.now()}-${crypto.randomUUID()}.${extension}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(PROJECT_IMAGES_BUCKET)
+      .upload(path, file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: file.type,
+      });
+
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage
+      .from(PROJECT_IMAGES_BUCKET)
+      .getPublicUrl(path);
+
+    return data.publicUrl;
+  };
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -118,10 +163,21 @@ export default function Admin() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      setIsUploadingImage(true);
+
+      let imageUrl = form.image_url;
+      let oldImagePathToDelete: string | null = null;
+
+      if (selectedImageFile) {
+        const uploadedUrl = await uploadProjectImage(selectedImageFile);
+        oldImagePathToDelete = editingProject ? extractStoragePathFromUrl(form.image_url) : null;
+        imageUrl = uploadedUrl;
+      }
+
       const payload = {
         title: form.title,
         description: form.description,
-        image_url: form.image_url,
+        image_url: imageUrl,
         live_url: form.live_url || null,
         github_url: form.github_url || null,
         tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
@@ -138,6 +194,20 @@ export default function Admin() {
         const { error } = await supabase.from("projects").insert([payload]);
         if (error) throw error;
       }
+
+      if (oldImagePathToDelete) {
+        const { error } = await supabase.storage
+          .from(PROJECT_IMAGES_BUCKET)
+          .remove([oldImagePathToDelete]);
+
+        // Deleting old files is best-effort and should not block successful updates.
+        if (error) {
+          console.warn("Failed to remove previous project image:", error.message);
+        }
+      }
+    },
+    onSettled: () => {
+      setIsUploadingImage(false);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-projects"] });
@@ -145,6 +215,7 @@ export default function Admin() {
       setDialogOpen(false);
       setEditingProject(null);
       setForm(emptyProject);
+      setSelectedImageFile(null);
       toast({ title: editingProject ? "Project updated" : "Project created" });
     },
     onError: (error: Error) => {
@@ -180,6 +251,7 @@ export default function Admin() {
 
   const openEdit = (project: Project) => {
     setEditingProject(project.id);
+    setSelectedImageFile(null);
     setForm({
       title: project.title,
       description: project.description,
@@ -194,6 +266,7 @@ export default function Admin() {
 
   const openNew = () => {
     setEditingProject(null);
+    setSelectedImageFile(null);
     setForm(emptyProject);
     setDialogOpen(true);
   };
@@ -384,11 +457,30 @@ export default function Admin() {
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               rows={3}
             />
-            <Input
-              placeholder="Image URL"
-              value={form.image_url}
-              onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-            />
+            <div className="space-y-2 rounded-lg border border-dashed border-border p-3">
+              <p className="text-sm font-medium text-foreground">Project Image</p>
+              <Input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setSelectedImageFile(e.target.files?.[0] || null)}
+              />
+              {selectedImageFile ? (
+                <p className="text-xs text-muted-foreground">
+                  Selected: {selectedImageFile.name}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  No new file selected. Existing image will be kept.
+                </p>
+              )}
+              {form.image_url && (
+                <img
+                  src={form.image_url}
+                  alt="Project preview"
+                  className="h-24 w-full rounded-md object-cover"
+                />
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <Input
                 placeholder="Live URL"
@@ -412,8 +504,8 @@ export default function Admin() {
               value={form.display_order}
               onChange={(e) => setForm({ ...form, display_order: parseInt(e.target.value) || 0 })}
             />
-            <Button type="submit" className="w-full" disabled={saveMutation.isPending}>
-              {saveMutation.isPending ? "Saving..." : "Save Project"}
+            <Button type="submit" className="w-full" disabled={saveMutation.isPending || isUploadingImage}>
+              {saveMutation.isPending || isUploadingImage ? "Saving..." : "Save Project"}
             </Button>
           </form>
         </DialogContent>
