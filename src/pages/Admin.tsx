@@ -68,6 +68,7 @@ export default function Admin() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteInquiryId, setDeleteInquiryId] = useState<string | null>(null);
   const [editingProject, setEditingProject] = useState<string | null>(null);
   const [form, setForm] = useState(emptyProject);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
@@ -250,6 +251,21 @@ export default function Admin() {
     },
   });
 
+  const deleteInquiryMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("contact_inquiries").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-inquiries"] });
+      setDeleteInquiryId(null);
+      toast({ title: "Inquiry deleted" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   const openEdit = (project: Project) => {
     setEditingProject(project.id);
     setSelectedImageFile(null);
@@ -418,15 +434,25 @@ export default function Admin() {
                           })}
                         </p>
                       </div>
-                      {!inquiry.is_read && (
+                      <div className="flex items-center gap-2">
+                        {!inquiry.is_read && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => markReadMutation.mutate(inquiry.id)}
+                          >
+                            Mark read
+                          </Button>
+                        )}
                         <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => markReadMutation.mutate(inquiry.id)}
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDeleteInquiryId(inquiry.id)}
+                          aria-label="Delete inquiry"
                         >
-                          Mark read
+                          <Trash2 className="h-4 w-4" />
                         </Button>
-                      )}
+                      </div>
                     </div>
                   </motion.div>
                 ))}
@@ -529,6 +555,26 @@ export default function Admin() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => deleteId && deleteMutation.mutate(deleteId)}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Inquiry Delete Confirmation */}
+      <AlertDialog open={!!deleteInquiryId} onOpenChange={() => setDeleteInquiryId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete inquiry?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteInquiryId && deleteInquiryMutation.mutate(deleteInquiryId)}
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
