@@ -6,7 +6,7 @@ export function Footer() {
           © {new Date().getFullYear()}  
         <a href="/admin" className='px-1'>
           Portfolio
-        </a>. All rights reserved.
+        </a>. All rights reserved
         </p>
       </div>
     </footer>
