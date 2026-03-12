@@ -11,11 +11,15 @@ import { z } from "zod";
 const contactSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
   email: z.string().trim().email("Invalid email").max(255),
+  phone: z.string().trim().max(30).refine(
+    (value) => !value || /^[+]?[-()\d\s]{7,20}$/.test(value),
+    "Invalid phone number"
+  ),
   message: z.string().trim().min(1, "Message is required").max(2000),
 });
 
 export function ContactForm() {
-  const [form, setForm] = useState({ name: "", email: "", message: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", message: "" });
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -38,14 +42,21 @@ export function ContactForm() {
     setLoading(true);
     const { error } = await supabase
       .from("contact_inquiries")
-      .insert([{ name: result.data.name, email: result.data.email, message: result.data.message }]);
+      .insert([
+        {
+          name: result.data.name,
+          email: result.data.email,
+          phone: result.data.phone || null,
+          message: result.data.message,
+        },
+      ]);
 
     setLoading(false);
     if (error) {
       toast({ title: "Error", description: "Failed to send message. Please try again.", variant: "destructive" });
     } else {
       setSent(true);
-      setForm({ name: "", email: "", message: "" });
+      setForm({ name: "", email: "", phone: "", message: "" });
     }
   };
 
@@ -107,6 +118,16 @@ export function ContactForm() {
                   className="bg-card"
                 />
                 {errors.email && <p className="mt-1 text-xs text-destructive">{errors.email}</p>}
+              </div>
+              <div>
+                <Input
+                  type="tel"
+                  placeholder="Your phone / WhatsApp (optional)"
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  className="bg-card"
+                />
+                {errors.phone && <p className="mt-1 text-xs text-destructive">{errors.phone}</p>}
               </div>
               <div>
                 <Textarea

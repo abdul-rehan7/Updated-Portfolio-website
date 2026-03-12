@@ -47,6 +47,7 @@ interface Inquiry {
   id: string;
   name: string;
   email: string;
+  phone: string | null;
   message: string;
   is_read: boolean;
   created_at: string;
@@ -399,6 +400,11 @@ export default function Admin() {
                           <p className="font-medium text-foreground">{inquiry.name}</p>
                           <span className="text-xs text-muted-foreground">{inquiry.email}</span>
                         </div>
+                        {inquiry.phone && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Phone / WhatsApp: {inquiry.phone}
+                          </p>
+                        )}
                         <p className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap">
                           {inquiry.message}
                         </p>
