@@ -31,7 +31,7 @@ export function Navbar() {
             <a
               key={link.href}
               href={link.href}
-              className="rounded-lg px-4 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              className="rounded-lg px-4 py-2 text-sm text-muted-foreground transition-colors hover:text-[#48A111] dark:hover:text-[#B4E50D]"
             >
               {link.label}
             </a>
@@ -62,8 +62,14 @@ export function Navbar() {
                 <a
                   key={link.href}
                   href={link.href}
-                  onClick={() => setMobileOpen(false)}
-                  className="rounded-lg px-4 py-3 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setMobileOpen(false);
+                    setTimeout(() => {
+                      document.querySelector(link.href)?.scrollIntoView({ behavior: "smooth" });
+                    }, 300);
+                  }}
+                  className="rounded-lg px-4 py-3 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-[#48A111] dark:hover:text-[#B4E50D]"
                 >
                   {link.label}
                 </a>

@@ -23,7 +23,7 @@ export function Hero() {
           <br />
           experiences that
           <br />
-          <span className="text-muted-foreground">matter.</span>
+          <span className="text-[#48A111] dark:text-[#B4E50D]">matter.</span>
         </motion.h1>
         <motion.p
           initial={{ opacity: 0, y: 20 }}
